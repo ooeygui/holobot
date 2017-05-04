@@ -27,7 +27,9 @@ namespace Control
 {
     class HoloLensRobot
     {
-        public const float wheelDiameter = 16.8f; // CM
+        public delegate void MoveComplete();
+
+        public const float wheelDiameter = 16.0f; // CM
         public const float wheelCircumference = (float)(Math.PI * wheelDiameter); // CM
         public const byte microStep = 1;
         public const short stepsPerRotation = (200 * microStep);
@@ -148,9 +150,9 @@ namespace Control
             return (float)((Math.PI * radius * deg) / 180.0f);
         }
 
-        public async Task Move(float distance)
+        public async Task Move(float distance, MoveComplete completed = null)
         {
-            await Move(distance, distance);
+            await Move(distance, distance, completed);
         }
 
         public async Task MoveAnalog(double xAnalog, double yAnalog)
@@ -281,7 +283,7 @@ namespace Control
             previousRightThrottle = rightMotorThrottle;
         }
 
-        public async Task Move(float rightDistance, float leftDistance)
+        public async Task Move(float rightDistance, float leftDistance, MoveComplete completed = null)
         {
             byte rightDirection = 1;
             byte leftDirection = 1;
@@ -313,6 +315,12 @@ namespace Control
                 {
                     outstandingMovesLeft--;
                     await arduinoPort.DigitalWrite(stepperLeftEnable, ArduinoComPort.PinState.High);
+                    if (outstandingMovesLeft == 0 &&
+                        outstandingMovesRight == 0 &&
+                        completed != null)
+                    {
+                        completed();
+                    }
                 },
                 (float progress) =>
                 {
@@ -324,6 +332,13 @@ namespace Control
                 {
                     outstandingMovesRight--;
                     await arduinoPort.DigitalWrite(stepperRightEnable, ArduinoComPort.PinState.High);
+
+                    if (outstandingMovesLeft == 0 &&
+                        outstandingMovesRight == 0 && 
+                        completed != null)
+                    {
+                        completed();
+                    }
                 },
                 (float progress) =>
                 {
@@ -331,10 +346,10 @@ namespace Control
                 });
         }
 
-        public async Task Rotate(float degrees)
+        public async Task Rotate(float degrees, MoveComplete completed = null)
         {
             var lengthInCM = arcLength(degrees, wheelBaseRadius);
-            await Move(-lengthInCM, lengthInCM);
+            await Move(-lengthInCM, lengthInCM, completed);
         }
 
         public async Task Stop()
@@ -432,16 +447,13 @@ namespace Control
 
             await Task.Run(async () =>
             {
-                await Rotate(90);
-                await Move(200);
-                await Rotate(-90);
-                await Move(10);
-                await Rotate(-90);
-                await Move(200);
-                await Rotate(90);
-                await Move(10);
-                await Rotate(90);
-                await Move(200);
+                await Rotate(90, async () =>
+                {
+                    await Move(150, async () =>
+                    {
+                        await Rotate(-90);
+                    });
+                });
             });
         }
 
