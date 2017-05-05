@@ -6,9 +6,10 @@ namespace FrameAnalysis
     {
     public:
         FrameAnalyzer();
-        Platform::String^ BeginProcessing(Windows::Graphics::Imaging::BitmapBuffer^ bitmapBuffer, int stride, int width, int height);
+        int BeginProcessing(Windows::Graphics::Imaging::BitmapBuffer^ bitmapBuffer, int stride, int width, int height);
+		Platform::String^ ClassificztionById(int id);
         void Init();
     private:
-        Platform::String^ ProcessFrame(BYTE* frameBytes, UINT32 frameSize, int stride, int width, int height);
+        int ProcessFrame(BYTE* frameBytes, UINT32 frameSize, int stride, int width, int height);
     };
 }

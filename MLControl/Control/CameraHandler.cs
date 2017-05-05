@@ -13,7 +13,7 @@ using FrameAnalysis;
 
 namespace Control
 {
-    class CameraHandler
+    public class CameraHandler : Bindable
     {
         private MainPage _mainPage;
         private MediaCapture _mediaCapture;
@@ -23,11 +23,35 @@ namespace Control
         private IReadOnlyDictionary<MediaFrameSourceKind, FrameRenderer> _frameRenderers = null;
 
         private int _groupSelectionIndex;
+        private int _currentClassifiedImage = -1;
+        private string _currentClassifiedImageName = "";
 
         private FrameAnalyzer _analyzer = new FrameAnalyzer();
 
         public CameraHandler()
         {
+        }
+
+        public int ClassifiedImage
+        {
+            get { return _currentClassifiedImage; }
+            internal set
+            {
+                _currentClassifiedImage = value;
+                NotifyPropertyChanged("ClassifiedImage");
+                
+                ClassifiedImageName = _analyzer.ClassificztionById(_currentClassifiedImage);
+            }
+        }
+
+        public string ClassifiedImageName
+        {
+            get { return _currentClassifiedImageName;  }
+            internal set
+            {
+                _currentClassifiedImageName = value;
+                NotifyPropertyChanged("ClassifiedImageName");
+            }
         }
 
         public async Task initialize(Image imageElement, MainPage mainPage)
@@ -227,7 +251,11 @@ namespace Control
                         {
                             using (var buffer = inputBitmap.LockBuffer(Windows.Graphics.Imaging.BitmapBufferAccessMode.Read))
                             {
-                                classification = _analyzer.BeginProcessing(buffer, buffer.GetPlaneDescription(0).Stride, inputBitmap.PixelWidth, inputBitmap.PixelHeight);
+                                int classificationId = _analyzer.BeginProcessing(buffer, buffer.GetPlaneDescription(0).Stride, inputBitmap.PixelWidth, inputBitmap.PixelHeight);
+                                if (classificationId != -1)
+                                {
+                                    ClassifiedImage = classificationId;
+                                }
                             }
                         }
 
@@ -236,12 +264,8 @@ namespace Control
 
                 }
             }
-
-            if (!string.IsNullOrWhiteSpace(classification))
-            {
-                _mainPage.ImageClassified(classification);
-            }
         }
-
     }
+
+
 }

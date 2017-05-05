@@ -38,7 +38,7 @@ namespace Control
         private HoloLensRobot robot = new HoloLensRobot();
         private RobotHttpServer httpServer;
         private CoreDispatcher _dispatcher;
-        private CameraHandler _handler = new CameraHandler();
+        public CameraHandler CameraHandler = new CameraHandler();
 
         private DispatcherTimer refresh = new DispatcherTimer() { Interval = TimeSpan.FromMilliseconds(1.0 / 30.0) };
 
@@ -53,13 +53,16 @@ namespace Control
         {
             base.OnNavigatedTo(e);
 
+            this.DataContext = CameraHandler;
+            robot.handler = CameraHandler;
+
             await robot.ConnectToArduino();
             httpServer = new RobotHttpServer(3000, robot);
             await httpServer.StartServer();
 
             try
             {
-                await _handler.initialize(CapturePreviewLeft, this);
+                await CameraHandler.initialize(CapturePreviewLeft, this);
             }
             catch (Exception ex)
             {
@@ -74,15 +77,6 @@ namespace Control
         private void Refresh_Tick(object sender, object e)
         {
             refreshElement.Visibility = refreshElement.Visibility == Visibility.Collapsed ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        internal async void ImageClassified(string classification)
-        {
-            await _dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
-            {
-                Status.Text = "Found : " + classification;
-                
-            });
         }
     }
 }
