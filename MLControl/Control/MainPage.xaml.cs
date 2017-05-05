@@ -20,26 +20,11 @@
 */
 
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Runtime.InteropServices.WindowsRuntime;
-using Windows.Foundation;
-using Windows.Foundation.Collections;
+using System.Diagnostics;
+using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Controls.Primitives;
-using Windows.UI.Xaml.Data;
-using Windows.UI.Xaml.Input;
-using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
-using Windows.UI.Popups;
-using Windows.Media.Capture;
-using Windows.Media.Effects;
-using Windows.Media.MediaProperties;
-using System.Threading.Tasks;
-using Windows.Devices.Enumeration;
-using System.Diagnostics;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
 
@@ -52,8 +37,8 @@ namespace Control
     {
         private HoloLensRobot robot = new HoloLensRobot();
         private RobotHttpServer httpServer;
-        private Drive drive;
-        private MediaCapture _mediaCaptureMgr;
+        private CoreDispatcher _dispatcher;
+        private CameraHandler _handler = new CameraHandler();
 
         private DispatcherTimer refresh = new DispatcherTimer() { Interval = TimeSpan.FromMilliseconds(1.0 / 30.0) };
 
@@ -61,7 +46,7 @@ namespace Control
         public MainPage()
         {
             this.InitializeComponent();
-
+            _dispatcher = CoreWindow.GetForCurrentThread().Dispatcher;
         }
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -72,8 +57,15 @@ namespace Control
             httpServer = new RobotHttpServer(3000, robot);
             await httpServer.StartServer();
 
-
-            _mediaCaptureMgr = await ConnectToCamera(0, CapturePreviewLeft);
+            try
+            {
+                await _handler.initialize(CapturePreviewLeft, this);
+            }
+            catch (Exception ex)
+            {
+                // sometimes...
+                Debug.WriteLine(ex.ToString());
+            }
 
             refresh.Tick += Refresh_Tick;
             refresh.Start();
@@ -84,45 +76,13 @@ namespace Control
             refreshElement.Visibility = refreshElement.Visibility == Visibility.Collapsed ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        private async Task<MediaCapture> ConnectToCamera(int i, CaptureElement preview)
+        internal async void ImageClassified(string classification)
         {
-            var manager = new Windows.Media.Capture.MediaCapture();
-
-            var allVideoDevices = await DeviceInformation.FindAllAsync(DeviceClass.VideoCapture);
-
-            if (allVideoDevices.Count > i)
+            await _dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
             {
-                var cameraDevice = allVideoDevices[i];
-
-                await manager.InitializeAsync(new MediaCaptureInitializationSettings { VideoDeviceId = cameraDevice.Id, StreamingCaptureMode = StreamingCaptureMode.Video });
-
-                var cameraProperties = manager.VideoDeviceController.GetAvailableMediaStreamProperties(MediaStreamType.VideoPreview).Select(x => x as VideoEncodingProperties).ToList();
-                foreach (var mediaEncodingProperty in cameraProperties)
-                {
-                    Debug.WriteLine(mediaEncodingProperty.Width + "x" + mediaEncodingProperty.Height + " FPS: " + mediaEncodingProperty.FrameRate.Numerator + "Type:" + mediaEncodingProperty.Type + "   SubType:" + mediaEncodingProperty.Subtype);
-                }
-
-
-                foreach (var mediaEncodingProperty in cameraProperties)
-                {
-                    if (//mediaEncodingProperty.Width == 960 &&
-                        //mediaEncodingProperty.Height == 544 &&
-                        mediaEncodingProperty.Width == 320 &&
-                        mediaEncodingProperty.Height == 240 &&
-                        mediaEncodingProperty.FrameRate.Numerator == 15 &&
-                        string.Compare(mediaEncodingProperty.Subtype, "YUY2") == 0)
-                    {
-                        Debug.WriteLine("Chosen: " + mediaEncodingProperty.Width + "x" + mediaEncodingProperty.Height + " FPS: " + mediaEncodingProperty.FrameRate.Numerator + "Type:" + mediaEncodingProperty.Type + "   SubType:" + mediaEncodingProperty.Subtype);
-                        await manager.VideoDeviceController.SetMediaStreamPropertiesAsync(MediaStreamType.VideoPreview, mediaEncodingProperty);
-                        break;
-                    }
-                }
-
-                preview.Source = manager;
-                await manager.StartPreviewAsync();
-            }
-
-            return manager;
+                Status.Text = "Found : " + classification;
+                
+            });
         }
     }
 }
