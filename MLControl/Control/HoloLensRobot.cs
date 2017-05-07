@@ -22,13 +22,13 @@
 using System;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using System.Threading;
+using System.ComponentModel;
 
 namespace Control
 {
     class HoloLensRobot
     {
-        public delegate void MoveComplete();
-
         public const float wheelDiameter = 16.0f; // CM
         public const float wheelCircumference = (float)(Math.PI * wheelDiameter); // CM
         public const byte microStep = 1;
@@ -76,7 +76,14 @@ namespace Control
         private double previousLeftThrottle = 0.0;
         private double previousRightThrottle = 0.0;
 
+        private byte rightDirection = 1;
+        private byte leftDirection = 1;
+
+
         private double lowEndCutOff = .2;
+
+        public CameraHandler handler;
+
 
         public async Task ConnectToArduino()
         {
@@ -150,9 +157,9 @@ namespace Control
             return (float)((Math.PI * radius * deg) / 180.0f);
         }
 
-        public async Task Move(float distance, MoveComplete completed = null)
+        public async Task Move(float distance, CancellationTokenSource cancelation = null)
         {
-            await Move(distance, distance, completed);
+            await Move(distance, distance, cancelation);
         }
 
         public async Task MoveAnalog(double xAnalog, double yAnalog)
@@ -191,7 +198,6 @@ namespace Control
             uint leftRunDistance = runDistance;
             uint rightRunDistance = runDistance;
 
-            byte leftDirection = 1;
             if (leftMotorThrottle < 0)
             {
                 leftDirection = 0;
@@ -236,7 +242,6 @@ namespace Control
             }
 
             short rightSpeed;
-            byte rightDirection = 1;
             if (rightMotorThrottle < 0)
             {
                 rightDirection = 0;
@@ -283,80 +288,101 @@ namespace Control
             previousRightThrottle = rightMotorThrottle;
         }
 
-        public async Task Move(float rightDistance, float leftDistance, MoveComplete completed = null)
+        public Task<bool> Move(float rightDistance, float leftDistance, CancellationTokenSource cancelation = null)
         {
-            byte rightDirection = 1;
-            byte leftDirection = 1;
-            if (rightDistance < 0)
+            var completion = new TaskCompletionSource<bool>();
+            if (cancelation != null && cancelation.IsCancellationRequested)
             {
-                rightDirection = 0;
-                rightDistance = Math.Abs(rightDistance);
-            }
-            if (leftDistance < 0)
-            {
-                leftDirection = 0;
-                leftDistance = Math.Abs(leftDistance);
+                completion.SetResult(false);
+                return completion.Task;
             }
 
-            var distanceL = stepsPerCM * leftDistance;
-            var distanceR = stepsPerCM * rightDistance;
+            var ignore = Task.Run(async () =>
+            {
 
-            var distL = (uint)Math.Floor(distanceL);
-            var distR = (uint)Math.Floor(distanceR);
-
-            outstandingMovesLeft = 1;
-            outstandingMovesRight = 1;
-
-            await arduinoPort.DigitalWrite(stepperLeftEnable, ArduinoComPort.PinState.Low);
-            await arduinoPort.DigitalWrite(stepperRightEnable, ArduinoComPort.PinState.Low);
-
-            await arduinoPort.SendStepperStep(stepperLeftDevice, leftDirection, distL, maxSpeed, acceleration,
-                async () =>
+                if (rightDistance < 0)
                 {
-                    outstandingMovesLeft--;
-                    await arduinoPort.DigitalWrite(stepperLeftEnable, ArduinoComPort.PinState.High);
-                    if (outstandingMovesLeft == 0 &&
-                        outstandingMovesRight == 0 &&
-                        completed != null)
+                    rightDirection = 0;
+                    rightDistance = Math.Abs(rightDistance);
+                }
+                if (leftDistance < 0)
+                {
+                    leftDirection = 0;
+                    leftDistance = Math.Abs(leftDistance);
+                }
+
+                var distanceL = stepsPerCM * leftDistance;
+                var distanceR = stepsPerCM * rightDistance;
+
+                var distL = (uint)Math.Floor(distanceL);
+                var distR = (uint)Math.Floor(distanceR);
+
+                outstandingMovesLeft = 1;
+                outstandingMovesRight = 1;
+
+                await arduinoPort.DigitalWrite(stepperLeftEnable, ArduinoComPort.PinState.Low);
+                await arduinoPort.DigitalWrite(stepperRightEnable, ArduinoComPort.PinState.Low);
+
+                await arduinoPort.SendStepperStep(stepperLeftDevice, leftDirection, distL, maxSpeed, acceleration,
+                    async () =>
                     {
-                        completed();
-                    }
-                },
-                (float progress) =>
-                {
-                    stepperLeftProgress = progress;
-                });
-
-            await arduinoPort.SendStepperStep(stepperRightDevice, rightDirection, distR, maxSpeed, acceleration,
-                async () =>
-                {
-                    outstandingMovesRight--;
-                    await arduinoPort.DigitalWrite(stepperRightEnable, ArduinoComPort.PinState.High);
-
-                    if (outstandingMovesLeft == 0 &&
-                        outstandingMovesRight == 0 && 
-                        completed != null)
+                        outstandingMovesLeft--;
+                        await arduinoPort.DigitalWrite(stepperLeftEnable, ArduinoComPort.PinState.High);
+                        if (outstandingMovesLeft == 0 &&
+                            outstandingMovesRight == 0)
+                        {
+                            completion.SetResult(true);
+                        }
+                    },
+                    (float progress) =>
                     {
-                        completed();
-                    }
-                },
-                (float progress) =>
-                {
-                    stepperRightProgress = progress;
-                });
+                        stepperLeftProgress = progress;
+                    });
+
+                await arduinoPort.SendStepperStep(stepperRightDevice, rightDirection, distR, maxSpeed, acceleration,
+                    async () =>
+                    {
+                        outstandingMovesRight--;
+                        await arduinoPort.DigitalWrite(stepperRightEnable, ArduinoComPort.PinState.High);
+
+                        if (outstandingMovesLeft == 0 &&
+                            outstandingMovesRight == 0)
+                        {
+                            completion.SetResult(true);
+                        }
+                    },
+                    (float progress) =>
+                    {
+                        stepperRightProgress = progress;
+                    });
+
+            });
+
+            return completion.Task;
         }
 
-        public async Task Rotate(float degrees, MoveComplete completed = null)
+        public async Task Rotate(float degrees, CancellationTokenSource cancelation = null)
         {
             var lengthInCM = arcLength(degrees, wheelBaseRadius);
-            await Move(-lengthInCM, lengthInCM, completed);
+            await Move(-lengthInCM, lengthInCM, cancelation);
         }
 
         public async Task Stop()
         {
-            // Stop is used for emergencies during run, but not a primary scenaro. For now, toggle enable
-            await arduinoPort.DigitalWrite(stepperLeftEnable, ArduinoComPort.PinState.High);
-            await arduinoPort.DigitalWrite(stepperRightEnable, ArduinoComPort.PinState.High);
+            float leftDist = 0;
+            float rightDist = 0;
+            if (outstandingMovesLeft > 0)
+            {
+                outstandingMovesLeft = 0;
+                leftDist = leftDirection > 0? rampDistance : -rampDistance;
+            }
+            if (outstandingMovesRight > 0)
+            {
+                outstandingMovesRight = 0;
+                rightDist = rightDirection > 0 ? rampDistance : -rampDistance; ;
+            }
+
+            await Move(leftDist, rightDist, null);
         }
 
         public async Task SetLedColor(byte r, byte g, byte b)
@@ -444,18 +470,24 @@ namespace Control
         public async Task Mission(int mission)
         {
             /// mission is the image we are looking for.
+            CancellationTokenSource source = new CancellationTokenSource();
 
-            await Task.Run(async () =>
+            handler.PropertyChanged += async delegate (object s, PropertyChangedEventArgs e)
             {
-                await Rotate(90, async () =>
+                if (string.CompareOrdinal(e.PropertyName, "ClassifiedImage") == 0)
                 {
-                    await Move(150, async () =>
+                    if (handler.ClassifiedImage == mission)
                     {
-                        await Rotate(-90);
-                    });
-                });
-            });
-        }
+                        // Found!
+                        source.Cancel();
+                        await Stop();
+                    }
+                }
+            };
 
+            await Rotate(90, source);
+            await Move(150, source);
+            await Rotate(-90, source);
+        }
     }
 }

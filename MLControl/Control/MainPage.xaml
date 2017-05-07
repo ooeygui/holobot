@@ -24,7 +24,7 @@
                 </Grid.ColumnDefinitions>
                 <Image Grid.Column="0" x:Name="CapturePreviewLeft"  Stretch="Fill"/>
             </Grid>
-            <TextBlock x:Name="Status" Grid.Row="1" />
+            <TextBlock x:Name="Status" Grid.Row="1" Text="{Binding Path=ClassifiedImageName}"/>
         </Grid>
     </Grid>
 </Page>
