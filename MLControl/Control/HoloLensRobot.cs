@@ -24,10 +24,11 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Threading;
 using System.ComponentModel;
+using System.Linq;
 
 namespace Control
 {
-    class HoloLensRobot
+    class HoloLensRobot : Bindable
     {
         public const float wheelDiameter = 16.0f; // CM
         public const float wheelCircumference = (float)(Math.PI * wheelDiameter); // CM
@@ -39,10 +40,6 @@ namespace Control
         public const float wheelBaseRadius = wheelBase / 2.0f;
         public const short maxSpeed = 1500;
         public const short acceleration = 800;
-        public const int neckTravelDuration = 4000; // ms
-        public const byte neckMotorDutyCycle = 255;
-        public const int armTravelDuration = 6000; //ms
-        public const byte armMotorDutyCycle = 255; // 12v motor
 
 
         private ArduinoComPort arduinoPort = new ArduinoComPort();
@@ -56,18 +53,6 @@ namespace Control
         private float stepperLeftProgress = 0;
         private float stepperRightProgress = 0;
 
-        private byte neckMotorPWMPin = 3;
-        private byte neckMotorDirPin = 12;
-
-        private byte selfieBoomPWMPin = 11;
-        private byte selfieDirPin = 13;
-
-        private byte ledClockPin = 10;
-        private byte ledDataPin = 9;
-
-        private bool neckextended = false;
-        private bool armextended = false;
-
         private int outstandingMovesLeft = 0;
         private int outstandingMovesRight = 0;
 
@@ -79,11 +64,90 @@ namespace Control
         private byte rightDirection = 1;
         private byte leftDirection = 1;
 
+        /// mission is the image we are looking for.
+        CancellationTokenSource cancellationTokenSource;
+
 
         private double lowEndCutOff = .2;
 
         public CameraHandler handler;
 
+        int currentMission = -1;
+        float heading = 0.0f;
+
+        public int CurrentMission
+        {
+            get
+            {
+                return currentMission;
+            }
+
+            internal set
+            {
+                currentMission = value;
+                NotifyPropertyChanged("CurrentMission");
+            }
+        }
+
+        public float Heading
+        {
+            get
+            {
+                return heading;
+            }
+
+            internal set
+            {
+                heading = value;
+                NotifyPropertyChanged("Heading");
+            }
+        }
+
+
+        public bool HasArduino
+        {
+            get { return arduinoPort.IsConnected;  }
+            private set { }
+        }
+
+        public float StepperLeftProgress
+        {
+            get { return stepperLeftProgress; }
+            private set
+            {
+                stepperLeftProgress = value;
+                NotifyPropertyChanged("StepperLeftProgress");
+                NotifyPropertyChanged("MoveProgress");
+            }
+        }
+        public float StepperRightProgress
+        {
+            get { return stepperRightProgress; }
+            private set
+            {
+                stepperRightProgress = value;
+                NotifyPropertyChanged("StepperRightProgress");
+                NotifyPropertyChanged("MoveProgress");
+            }
+        }
+        public float MoveProgress
+        {
+            get
+            {
+                float progress = StepperLeftProgress * StepperRightProgress;
+                return stepperRightProgress;
+            }
+            private set
+            {
+            }
+        }
+
+        public bool IsMoving
+        {
+            get { return outstandingMovesLeft > 0 || outstandingMovesRight > 0;  }
+            private set { }
+
+        }
 
         public async Task ConnectToArduino()
         {
@@ -98,59 +162,9 @@ namespace Control
             await arduinoPort.SetPinMode(stepperRightEnable, ArduinoComPort.PinMode.Output);
             await arduinoPort.DigitalWrite(stepperRightEnable, ArduinoComPort.PinState.High);
 
-            await arduinoPort.SendLEDStripConfig(ledClockPin, ledDataPin);
-
-            await arduinoPort.SetPinMode(neckMotorDirPin, ArduinoComPort.PinMode.Output);
-            await arduinoPort.SetPinMode(neckMotorPWMPin, ArduinoComPort.PinMode.PWM);
-
-            await arduinoPort.SetPinMode(selfieDirPin, ArduinoComPort.PinMode.Output);
-            await arduinoPort.SetPinMode(selfieBoomPWMPin, ArduinoComPort.PinMode.PWM);
         }
 
-        public bool HasArduino
-        {
-            get { return arduinoPort.IsConnected;  }
-            private set { }
-        }
 
-        public bool NeckExtended
-        {
-            get { return neckextended; }
-            private set { }
-        }
-
-        public bool ArmExtended
-        {
-            get { return armextended; }
-            private set { }
-        }
-
-        public float StepperLeftProgress
-        {
-            get { return stepperLeftProgress; }
-            private set { }
-        }
-        public float StepperRightProgress
-        {
-            get { return stepperRightProgress; }
-            private set { }
-        }
-        public float MoveProgress
-        {
-            get
-            {
-                float progress = StepperLeftProgress * StepperRightProgress;
-                return stepperRightProgress;
-            }
-            private set { }
-        }
-
-        public bool IsMoving
-        {
-            get { return outstandingMovesLeft > 0 || outstandingMovesRight > 0;  }
-            private set { }
-
-        }
 
         private float arcLength(float deg, float radius)
         {
@@ -237,7 +251,7 @@ namespace Control
                     },
                     (float progress) =>
                     {
-                        stepperLeftProgress = progress;
+                        StepperLeftProgress = progress;
                     });
             }
 
@@ -280,7 +294,7 @@ namespace Control
                     },
                     (float progress) =>
                     {
-                        stepperRightProgress = progress;
+                        StepperRightProgress = progress;
                     });
             }
 
@@ -300,33 +314,25 @@ namespace Control
             var ignore = Task.Run(async () =>
             {
 
-                if (rightDistance < 0)
-                {
-                    rightDirection = 0;
-                    rightDistance = Math.Abs(rightDistance);
-                }
-                if (leftDistance < 0)
-                {
-                    leftDirection = 0;
-                    leftDistance = Math.Abs(leftDistance);
-                }
+                rightDirection = (byte)((rightDistance > 0)? 1 : 0);
+                rightDistance = Math.Abs(rightDistance);
+                leftDirection = (byte)((leftDistance > 0) ? 1 : 0); ;
+                leftDistance = Math.Abs(leftDistance);
 
-                var distanceL = stepsPerCM * leftDistance;
-                var distanceR = stepsPerCM * rightDistance;
+                var distanceL = (uint)Math.Floor(stepsPerCM * leftDistance);
+                var distanceR = (uint)Math.Floor(stepsPerCM * rightDistance);
 
-                var distL = (uint)Math.Floor(distanceL);
-                var distR = (uint)Math.Floor(distanceR);
-
-                outstandingMovesLeft = 1;
-                outstandingMovesRight = 1;
+                // We can now overlap moves; however, last command wins, but we need to complete all outstanding ones
+                Interlocked.Increment(ref outstandingMovesLeft);
+                Interlocked.Increment(ref outstandingMovesRight);
 
                 await arduinoPort.DigitalWrite(stepperLeftEnable, ArduinoComPort.PinState.Low);
                 await arduinoPort.DigitalWrite(stepperRightEnable, ArduinoComPort.PinState.Low);
 
-                await arduinoPort.SendStepperStep(stepperLeftDevice, leftDirection, distL, maxSpeed, acceleration,
+                await arduinoPort.SendStepperStep(stepperLeftDevice, leftDirection, distanceL, maxSpeed, acceleration,
                     async () =>
                     {
-                        outstandingMovesLeft--;
+                        Interlocked.Decrement(ref outstandingMovesLeft);
                         await arduinoPort.DigitalWrite(stepperLeftEnable, ArduinoComPort.PinState.High);
                         if (outstandingMovesLeft == 0 &&
                             outstandingMovesRight == 0)
@@ -336,13 +342,13 @@ namespace Control
                     },
                     (float progress) =>
                     {
-                        stepperLeftProgress = progress;
+                        StepperLeftProgress = progress;
                     });
 
-                await arduinoPort.SendStepperStep(stepperRightDevice, rightDirection, distR, maxSpeed, acceleration,
+                await arduinoPort.SendStepperStep(stepperRightDevice, rightDirection, distanceR, maxSpeed, acceleration,
                     async () =>
                     {
-                        outstandingMovesRight--;
+                        Interlocked.Decrement(ref outstandingMovesRight);
                         await arduinoPort.DigitalWrite(stepperRightEnable, ArduinoComPort.PinState.High);
 
                         if (outstandingMovesLeft == 0 &&
@@ -353,7 +359,7 @@ namespace Control
                     },
                     (float progress) =>
                     {
-                        stepperRightProgress = progress;
+                        StepperRightProgress = progress;
                     });
 
             });
@@ -369,125 +375,78 @@ namespace Control
 
         public async Task Stop()
         {
+            if (outstandingMovesLeft == 0 &&
+                outstandingMovesRight == 0)
+            {
+                // we are stopped.
+                return;
+            }
+
             float leftDist = 0;
             float rightDist = 0;
             if (outstandingMovesLeft > 0)
             {
-                outstandingMovesLeft = 0;
                 leftDist = leftDirection > 0? rampDistance : -rampDistance;
             }
             if (outstandingMovesRight > 0)
             {
-                outstandingMovesRight = 0;
                 rightDist = rightDirection > 0 ? rampDistance : -rampDistance; ;
             }
 
             await Move(leftDist, rightDist, null);
         }
 
-        public async Task SetLedColor(byte r, byte g, byte b)
-        {
-            await arduinoPort.SetLEDStripColor(r, g, b);
-        }
-
-        public async Task RaiseNeck(int duration = neckTravelDuration)
-        {
-            if (!neckextended || duration != neckTravelDuration)
-            {
-                await arduinoPort.DigitalWrite(neckMotorDirPin, ArduinoComPort.PinState.High);
-                await arduinoPort.AnalogWrite(neckMotorPWMPin, neckMotorDutyCycle);
-                await Task.Delay(duration); // Yucky, could require some tuning
-                await StopNeck();
-
-                // If you are passing a duration, then we won't lock it.
-                if (duration == neckTravelDuration)
-                {
-                    neckextended = true;
-                }
-            }
-        }
-
-        public async Task LowerNeck(int duration = neckTravelDuration)
-        {
-            if (neckextended || duration != neckTravelDuration)
-            {
-                await arduinoPort.DigitalWrite(neckMotorDirPin, ArduinoComPort.PinState.Low);
-                await arduinoPort.AnalogWrite(neckMotorPWMPin, neckMotorDutyCycle);
-                await Task.Delay(duration); // Yucky, could require some tuning
-                await StopNeck();
-
-                // If you are passing a duration, then we won't lock it.
-                if (duration == neckTravelDuration)
-                {
-                    neckextended = false;
-                }
-            }
-        }
-
-        public async Task StopNeck()
-        {
-            await arduinoPort.AnalogWrite(neckMotorPWMPin, 0);
-        }
-
-        public async Task RaiseArm(int duration = armTravelDuration)
-        {
-            if (!armextended || duration != armTravelDuration)
-            {
-                await arduinoPort.DigitalWrite(selfieDirPin, ArduinoComPort.PinState.High);
-                await arduinoPort.AnalogWrite(selfieBoomPWMPin, armMotorDutyCycle);
-                await Task.Delay(duration); // Yucky, could require some tuning
-                await StopArm();
-
-                // If you are passing a duration, then we won't lock it.
-                if (duration == armTravelDuration)
-                {
-                    armextended = true;
-                }
-            }
-        }
-
-        public async Task LowerArm(int duration = armTravelDuration)
-        {
-            if (armextended || duration != armTravelDuration)
-            {
-                await arduinoPort.DigitalWrite(selfieDirPin, ArduinoComPort.PinState.Low);
-                await arduinoPort.AnalogWrite(selfieBoomPWMPin, armMotorDutyCycle);
-                await Task.Delay(duration); // Yucky, could require some tuning
-                await StopArm();
-                // If you are passing a duration, then we won't lock it.
-                if (duration == armTravelDuration)
-                {
-                    armextended = false;
-                }
-            }
-        }
-
-        public async Task StopArm()
-        {
-            await arduinoPort.AnalogWrite(selfieBoomPWMPin, 0);
-        }
-
         public async Task Mission(int mission)
         {
-            /// mission is the image we are looking for.
-            CancellationTokenSource source = new CancellationTokenSource();
-
-            handler.PropertyChanged += async delegate (object s, PropertyChangedEventArgs e)
+            if (CurrentMission == -1)
             {
-                if (string.CompareOrdinal(e.PropertyName, "ClassifiedImage") == 0)
-                {
-                    if (handler.ClassifiedImage == mission)
-                    {
-                        // Found!
-                        source.Cancel();
-                        await Stop();
-                    }
-                }
-            };
+                CurrentMission = mission;
+                handler.PropertyChanged += Handler_PropertyChanged;
 
-            await Rotate(90, source);
-            await Move(150, source);
-            await Rotate(-90, source);
+                cancellationTokenSource = new CancellationTokenSource();
+                Heading = 0;
+
+
+                foreach (var i in Enumerable.Range(0, 5))
+                {
+                    await Rotate(90, cancellationTokenSource);       // Right
+                    Heading = 90;
+                    await Move(150, cancellationTokenSource);        // Forward 1.5m
+                    await Rotate(-90, cancellationTokenSource);      // Left
+                    Heading = 0;
+                    await Move(20, cancellationTokenSource);         // Forward 20cm
+                    await Rotate(-90, cancellationTokenSource);      // Left
+                    Heading = -90;
+
+                    await Move(150, cancellationTokenSource);        // Forward  1.5m
+                    await Rotate(90, cancellationTokenSource);      // Right
+                    await Move(20, cancellationTokenSource);         // Forward 20cm
+                    Heading = 0;
+                }
+
+                CurrentMission = -1;
+            }
+
+        }
+
+        private async void Handler_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (string.CompareOrdinal(e.PropertyName, "ClassifiedImage") == 0)
+            {
+                if (handler.ClassifiedImage == CurrentMission)
+                {
+                    handler.PropertyChanged -= Handler_PropertyChanged;
+                    if (cancellationTokenSource != null)
+                    {
+                        cancellationTokenSource.Cancel();
+                    }
+
+                    // Found!
+                    await Stop();
+
+                    CurrentMission = -1;
+                }
+            }
         }
     }
 }
