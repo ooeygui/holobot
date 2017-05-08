@@ -21,6 +21,9 @@
 
 using System;
 using System.Diagnostics;
+using System.Linq;
+using Windows.Networking;
+using Windows.Networking.Connectivity;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -38,10 +41,12 @@ namespace Control
         private HoloLensRobot robot = new HoloLensRobot();
         private RobotHttpServer httpServer;
         private CoreDispatcher _dispatcher;
-        public CameraHandler CameraHandler = new CameraHandler();
+        public CameraHandler cameraHandler = new CameraHandler();
+        private Drive drive;
 
         private DispatcherTimer refresh = new DispatcherTimer() { Interval = TimeSpan.FromMilliseconds(1.0 / 30.0) };
 
+        public DroneControlViewModel VM { get; set; }
 
         public MainPage()
         {
@@ -53,16 +58,39 @@ namespace Control
         {
             base.OnNavigatedTo(e);
 
-            this.DataContext = CameraHandler;
-            robot.handler = CameraHandler;
+            //Assign View Model to Data Context
+            VM = new DroneControlViewModel();
+            this.DataContext = VM;
+            VM.Objective = "Waiting for mission";
+
+            var hostNames = NetworkInformation.GetHostNames();
+            var hostName = hostNames.FirstOrDefault(name => name.Type == HostNameType.DomainName)?.DisplayName ?? "???";
+            VM.Title = hostName;
+
+
+            //Handle Power Button
+            DroneOverlay.PowerButtonClicked += delegate (object sender, EventArgs args)
+            {
+                //Handle the Power Button Here..
+            };
+
+
+            robot.handler = cameraHandler;
+            cameraHandler.PropertyChanged += CameraHandler_PropertyChanged;
+
 
             await robot.ConnectToArduino();
             httpServer = new RobotHttpServer(3000, robot);
             await httpServer.StartServer();
 
+            drive = new Drive(robot);
+            drive.initialize();
+
+            robot.PropertyChanged += Robot_PropertyChanged;
+
             try
             {
-                await CameraHandler.initialize(CapturePreviewLeft, this);
+                await cameraHandler.initialize(CapturePreviewLeft, this);
             }
             catch (Exception ex)
             {
@@ -72,6 +100,29 @@ namespace Control
 
             refresh.Tick += Refresh_Tick;
             refresh.Start();
+        }
+
+        private void Robot_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (string.CompareOrdinal(e.PropertyName, "CurrentMission") == 0)
+            {
+                if (robot.CurrentMission == -1)
+                {
+                    VM.Objective = "Waiting for mission";
+                }
+                else
+                {
+                    VM.Objective = $"Looking for {cameraHandler.ClassifiedImageNameFromId(robot.CurrentMission)}";
+                }
+            }
+        }
+
+        private void CameraHandler_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (string.CompareOrdinal(e.PropertyName, "ClassifiedImageName") == 0)
+            {
+                VM.Status = $"Found {cameraHandler.ClassifiedImageName}";
+            }
         }
 
         private void Refresh_Tick(object sender, object e)

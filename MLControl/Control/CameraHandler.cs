@@ -54,6 +54,11 @@ namespace Control
             }
         }
 
+        public string ClassifiedImageNameFromId(int id)
+        {
+            return _analyzer.ClassificztionById(id);
+        }
+
         public async Task initialize(Image imageElement, MainPage mainPage)
         {
             _analyzer.Init();

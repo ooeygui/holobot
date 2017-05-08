@@ -1,0 +1,3 @@
+[submodule "extern/iot-controls"]
+	path = extern/iot-controls
+	url = https://github.com/ooeygui/iot-controls
