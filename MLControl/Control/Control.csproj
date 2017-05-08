@@ -202,10 +202,6 @@
     </Page>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\extern\iot-controls\AwareGroup.IoTDroneDisplay.DroneControls\AwareGroup.IoTDroneDisplay.DroneControls.csproj">
-      <Project>{4c19b0a1-2ad9-42b5-9139-18ce2fc29c62}</Project>
-      <Name>AwareGroup.IoTDroneDisplay.DroneControls</Name>
-    </ProjectReference>
     <ProjectReference Include="..\FrameAnalysis\FrameAnalysis.vcxproj">
       <Project>{a3f765c3-7760-47bf-8000-0393e356740d}</Project>
       <Name>FrameAnalysis</Name>
