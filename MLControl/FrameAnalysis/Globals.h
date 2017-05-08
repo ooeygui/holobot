@@ -82,8 +82,6 @@ extern bool imageInjected;
 
 extern bool modelGenStatus;
 
-extern int imageClassificationCounter;
-
 extern std::atomic_bool evaluating;
 
 #endif
