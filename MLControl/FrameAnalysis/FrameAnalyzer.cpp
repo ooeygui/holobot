@@ -95,52 +95,47 @@ void FrameAnalyzer::Init()
 }
 
 
-int FrameAnalyzer::BeginProcessing(BitmapBuffer^ bitmapBuffer, int stride, int width, int height)
+IAsyncOperation<int>^  FrameAnalyzer::BeginProcessing(BitmapBuffer^ bitmapBuffer, int stride, int width, int height)
 {
-    auto memoryBufferReference = bitmapBuffer->CreateReference();
-
-    ComPtr<IMemoryBufferByteAccess> pByteAccess;
-    HRESULT hr = reinterpret_cast<IInspectable*>(memoryBufferReference)->QueryInterface(IID_PPV_ARGS(pByteAccess.GetAddressOf()));
-    if (FAILED(hr))
+    return create_async([this, bitmapBuffer, stride, width, height]() -> int
     {
-        return -1;
-    }
-    BYTE* pBuffer = nullptr;
-    UINT32 capacity = 0;
-    hr = pByteAccess->GetBuffer(&pBuffer, &capacity);
-    if (FAILED(hr))
-    {
-        return -1;
-    }
 
-    return ProcessFrame(pBuffer, capacity, stride, width, height);
+        auto memoryBufferReference = bitmapBuffer->CreateReference();
+
+        ComPtr<IMemoryBufferByteAccess> pByteAccess;
+        HRESULT hr = reinterpret_cast<IInspectable*>(memoryBufferReference)->QueryInterface(IID_PPV_ARGS(pByteAccess.GetAddressOf()));
+        if (FAILED(hr))
+        {
+            return -1;
+        }
+        BYTE* pBuffer = nullptr;
+        UINT32 capacity = 0;
+        hr = pByteAccess->GetBuffer(&pBuffer, &capacity);
+        if (FAILED(hr))
+        {
+            return -1;
+        }
+
+        return ProcessFrame(pBuffer, capacity, stride, width, height);
+    });
 }
 
 int FrameAnalyzer::ProcessFrame(BYTE* frameBytes, UINT32 frameSize, int stride, int width, int height)
 {
-    if (imageClassificationCounter == classificationFreq) {
+    // Consume the input YUY2 frame
+    ConsumeImage(frameBytes, stride, width, height);
 
-        imageClassificationCounter = 0;
+    // Image Pre-Processing Logic
+    PreProcessing::ImageFrameProcessingLogic();
 
-        // Consume the input YUY2 frame
-        ConsumeImage(frameBytes, stride, width, height);
-
-        // Image Pre-Processing Logic
-        PreProcessing::ImageFrameProcessingLogic();
-
-        if (evaluating.load() == false) {
-            // CNTK Evaluator Logic (atomic)
-            evaluating.store(true);
-            //ImageInjector::WriteBmpFile();
-            //String^ ImageClassStrPath = CNTKEvaluator::ClassifyImages();
-			int classifiedImage = CNTKEvaluator::EvaluateImageClassificationModel();
-            evaluating.store(false);
-            return classifiedImage;
-        }
-    }
-    else
-    {
-        imageClassificationCounter++;
+    if (evaluating.load() == false) {
+        // CNTK Evaluator Logic (atomic)
+        evaluating.store(true);
+        //ImageInjector::WriteBmpFile();
+        //String^ ImageClassStrPath = CNTKEvaluator::ClassifyImages();
+        int classifiedImage = CNTKEvaluator::EvaluateImageClassificationModel();
+        evaluating.store(false);
+        return classifiedImage;
     }
 
     return -1;
@@ -153,5 +148,3 @@ Platform::String^ FrameAnalyzer::ClassificztionById(int id)
 
 	return ImageClassStrPath;
 }
-
-
