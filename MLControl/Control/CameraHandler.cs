@@ -26,6 +26,9 @@ namespace Control
         private int _currentClassifiedImage = -1;
         private string _currentClassifiedImageName = "";
 
+        private const int ClassificationFrequencyInFrames = 15;
+        private int _currentClassificationFrame = 0;
+
         private FrameAnalyzer _analyzer = new FrameAnalyzer();
 
         public CameraHandler()
@@ -237,7 +240,7 @@ namespace Control
             }
         }
 
-        private void FrameReader_FrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args)
+        private async void FrameReader_FrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args)
         {
             string classification = string.Empty;
             // TryAcquireLatestFrame will return the latest frame that has not yet been acquired.
@@ -254,17 +257,25 @@ namespace Control
                     {
                         if (inputBitmap != null)
                         {
-                            using (var buffer = inputBitmap.LockBuffer(Windows.Graphics.Imaging.BitmapBufferAccessMode.Read))
+                            _currentClassificationFrame++;
+
+                            if (_currentClassificationFrame >= ClassificationFrequencyInFrames)
                             {
-                                int classificationId = _analyzer.BeginProcessing(buffer, buffer.GetPlaneDescription(0).Stride, inputBitmap.PixelWidth, inputBitmap.PixelHeight);
-                                if (classificationId != -1)
+                                _currentClassificationFrame = 0;
+                                using (var buffer = inputBitmap.LockBuffer(Windows.Graphics.Imaging.BitmapBufferAccessMode.Read))
                                 {
-                                    ClassifiedImage = classificationId;
+                                    int classificationId = await _analyzer.BeginProcessing(buffer, buffer.GetPlaneDescription(0).Stride, inputBitmap.PixelWidth, inputBitmap.PixelHeight);
+                                    if (classificationId != -1)
+                                    {
+                                        ClassifiedImage = classificationId;
+                                    }
                                 }
                             }
+                            else
+                            {
+                                renderer.ProcessFrame(frame);
+                            }
                         }
-
-                        renderer.ProcessFrame(frame);
                     }
 
                 }
