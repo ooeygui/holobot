@@ -225,8 +225,11 @@ namespace Control
                 (byte)SysEx.End
             };
 
-            stepperComplete[deviceNumber] = completion;
-            stepperProgress[deviceNumber] = progress;
+            lock (this)
+            {
+                stepperComplete[deviceNumber] += completion;
+                stepperProgress[deviceNumber] += progress;
+            }
 
             await WriteData(commandBuffer);
         }
@@ -315,6 +318,21 @@ namespace Control
                                     {
                                         var deviceNumber = sysexBuffer[2];
                                         stepperComplete[deviceNumber]();
+
+                                        // After complete, drain both progress and complete handlers.
+
+                                        lock (this)
+                                        {
+                                            foreach (var d in stepperComplete[deviceNumber].GetInvocationList())
+                                            {
+                                                stepperComplete[deviceNumber] -= (StepperComplete)d;
+                                            }
+
+                                            foreach (var d in stepperProgress[deviceNumber].GetInvocationList())
+                                            {
+                                                stepperProgress[deviceNumber] -= (StepperProgress)d;
+                                            }
+                                        }
                                     }
                                     break;
                                 case (byte)SysEx.StepperProgress:

@@ -95,7 +95,7 @@ void FrameAnalyzer::Init()
 }
 
 
-Platform::String^ FrameAnalyzer::BeginProcessing(BitmapBuffer^ bitmapBuffer, int stride, int width, int height)
+int FrameAnalyzer::BeginProcessing(BitmapBuffer^ bitmapBuffer, int stride, int width, int height)
 {
     auto memoryBufferReference = bitmapBuffer->CreateReference();
 
@@ -103,20 +103,20 @@ Platform::String^ FrameAnalyzer::BeginProcessing(BitmapBuffer^ bitmapBuffer, int
     HRESULT hr = reinterpret_cast<IInspectable*>(memoryBufferReference)->QueryInterface(IID_PPV_ARGS(pByteAccess.GetAddressOf()));
     if (FAILED(hr))
     {
-        return nullptr;
+        return -1;
     }
     BYTE* pBuffer = nullptr;
     UINT32 capacity = 0;
     hr = pByteAccess->GetBuffer(&pBuffer, &capacity);
     if (FAILED(hr))
     {
-        return nullptr;
+        return -1;
     }
 
     return ProcessFrame(pBuffer, capacity, stride, width, height);
 }
 
-Platform::String^ FrameAnalyzer::ProcessFrame(BYTE* frameBytes, UINT32 frameSize, int stride, int width, int height)
+int FrameAnalyzer::ProcessFrame(BYTE* frameBytes, UINT32 frameSize, int stride, int width, int height)
 {
     if (imageClassificationCounter == classificationFreq) {
 
@@ -132,9 +132,10 @@ Platform::String^ FrameAnalyzer::ProcessFrame(BYTE* frameBytes, UINT32 frameSize
             // CNTK Evaluator Logic (atomic)
             evaluating.store(true);
             //ImageInjector::WriteBmpFile();
-            String^ ImageClassStrPath = CNTKEvaluator::ClassifyImages();
+            //String^ ImageClassStrPath = CNTKEvaluator::ClassifyImages();
+			int classifiedImage = CNTKEvaluator::EvaluateImageClassificationModel();
             evaluating.store(false);
-            return ImageClassStrPath;
+            return classifiedImage;
         }
     }
     else
@@ -142,6 +143,15 @@ Platform::String^ FrameAnalyzer::ProcessFrame(BYTE* frameBytes, UINT32 frameSize
         imageClassificationCounter++;
     }
 
-    return nullptr;
+    return -1;
 }
+
+Platform::String^ FrameAnalyzer::ClassificztionById(int id)
+{
+	std::string ImageClassStr = Helper::MapImageClassNumberToImageClassString(id);
+	Platform::String^ ImageClassStrPath = Helper::stringToPlatformString(ImageClassStr);
+
+	return ImageClassStrPath;
+}
+
 

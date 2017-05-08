@@ -5,6 +5,7 @@
     xmlns:local="using:Control"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:dronectls="using:AwareGroup.IoTDroneDisplay.DroneControls.Controls"
     mc:Ignorable="d">
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
@@ -24,7 +25,19 @@
                 </Grid.ColumnDefinitions>
                 <Image Grid.Column="0" x:Name="CapturePreviewLeft"  Stretch="Fill"/>
             </Grid>
-            <TextBlock x:Name="Status" Grid.Row="1" />
+            <dronectls:DroneOverlayControl
+                x:Name="DroneOverlay"
+                Roll="{Binding Roll}"
+                Heading="{Binding Heading}"
+                Altitude="{Binding Altitude}"
+                Pitch="{Binding Pitch}"
+                X="{Binding X}"
+                Y="{Binding Y}"
+                Title="{Binding Title}"
+                BatteryLevel="{Binding BatteryLevel}"
+                Objective="{Binding Objective}"
+                Status="{Binding Status}"
+                />
         </Grid>
     </Grid>
 </Page>

@@ -60,9 +60,6 @@ namespace Control
                         SoftwareBitmap latestBitmap;
                         while ((latestBitmap = Interlocked.Exchange(ref _backBuffer, null)) != null)
                         {
-                            _imageElement.Width = latestBitmap.PixelWidth;
-                            _imageElement.Height = latestBitmap.PixelHeight;
-
                             var imageSource = (SoftwareBitmapSource)_imageElement.Source;
                             await imageSource.SetBitmapAsync(latestBitmap);
                             latestBitmap.Dispose();
