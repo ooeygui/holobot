@@ -90,7 +90,7 @@ namespace Control
 
             try
             {
-                await cameraHandler.initialize(CapturePreviewLeft, this);
+                await cameraHandler.initialize(FullScreenImage, PreviewImage, this);
             }
             catch (Exception ex)
             {

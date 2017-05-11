@@ -25,8 +25,15 @@ namespace Control
         private int _groupSelectionIndex;
         private int _currentClassifiedImage = -1;
         private string _currentClassifiedImageName = "";
-
-        private const int ClassificationFrequencyInFrames = 15;
+        readonly int[] approvedClassifiedImages =
+        {
+            403, // aircraft carrier
+            294, 295, 297, // bear
+            643, // person
+            508, // keyboard
+            664, // monitor
+        };
+        private const int ClassificationFrequencyInFrames = 5;
         private int _currentClassificationFrame = 0;
 
         private FrameAnalyzer _analyzer = new FrameAnalyzer();
@@ -42,14 +49,14 @@ namespace Control
             {
                 _currentClassifiedImage = value;
                 NotifyPropertyChanged("ClassifiedImage");
-                
+
                 ClassifiedImageName = _analyzer.ClassificztionById(_currentClassifiedImage);
             }
         }
 
         public string ClassifiedImageName
         {
-            get { return _currentClassifiedImageName;  }
+            get { return _currentClassifiedImageName; }
             internal set
             {
                 _currentClassifiedImageName = value;
@@ -62,7 +69,7 @@ namespace Control
             return _analyzer.ClassificztionById(id);
         }
 
-        public async Task initialize(Image imageElement, MainPage mainPage)
+        public async Task initialize(Image imageElement, Image previewImageElement, MainPage mainPage)
         {
             _analyzer.Init();
 
@@ -72,7 +79,7 @@ namespace Control
             {
                 _frameRenderers = new Dictionary<MediaFrameSourceKind, FrameRenderer>()
                 {
-                    { MediaFrameSourceKind.Color, new FrameRenderer(imageElement) },
+                    { MediaFrameSourceKind.Color, new FrameRenderer(imageElement, previewImageElement) },
                 };
             }
 
@@ -258,30 +265,33 @@ namespace Control
                         if (inputBitmap != null)
                         {
                             _currentClassificationFrame++;
+                            var sourceKind = frame?.VideoMediaFrame.FrameReference.SourceKind;
+                            var depthScale = (float)frame?.VideoMediaFrame.DepthMediaFrame.DepthFormat.DepthScaleInMeters;
 
-                            if (_currentClassificationFrame >= ClassificationFrequencyInFrames)
+                            using (var buffer = inputBitmap.LockBuffer(Windows.Graphics.Imaging.BitmapBufferAccessMode.Read))
                             {
-                                _currentClassificationFrame = 0;
-                                using (var buffer = inputBitmap.LockBuffer(Windows.Graphics.Imaging.BitmapBufferAccessMode.Read))
+                                renderer.ProcessFrameForPreview(inputBitmap, sourceKind, depthScale);
+
+                                if (_currentClassificationFrame >= ClassificationFrequencyInFrames)
                                 {
+                                    _currentClassificationFrame = 0;
                                     int classificationId = await _analyzer.BeginProcessing(buffer, buffer.GetPlaneDescription(0).Stride, inputBitmap.PixelWidth, inputBitmap.PixelHeight);
                                     if (classificationId != -1)
                                     {
-                                        ClassifiedImage = classificationId;
+                                        if (approvedClassifiedImages.Contains<int>(classificationId))
+                                        {
+                                            ClassifiedImage = classificationId;
+                                            renderer.ProcessFrame(inputBitmap, sourceKind, depthScale);
+                                        }
                                     }
                                 }
                             }
-                            else
-                            {
-                                renderer.ProcessFrame(frame);
-                            }
+
                         }
                     }
-
                 }
+
             }
         }
     }
-
-
 }
