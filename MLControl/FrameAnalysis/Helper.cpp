@@ -364,9 +364,9 @@ std::string Helper::MapImageClassNumberToImageClassString(int ImageClass)
 	case 280: return "grey fox"; break;
 	case 281: return "tabby"; break;
 	case 282: return "tiger cat"; break;
-	case 283: return "Persian cat"; break;
-	case 284: return "Siamese cat"; break;
-	case 285: return "Egyptian cat"; break;
+	case 283: return "cat"; break;   // "Persian cat"
+    case 284: return "cat"; break;   // "Siamese cat"
+    case 285: return "cat"; break;   // "Egyptian cat"
 	case 286: return "cougar"; break;
 	case 287: return "lynx"; break;
 	case 288: return "leopard"; break;
@@ -375,10 +375,10 @@ std::string Helper::MapImageClassNumberToImageClassString(int ImageClass)
 	case 291: return "lion"; break;
 	case 292: return "tiger"; break;
 	case 293: return "cheetah"; break;
-	case 294: return "brown bear"; break;
-	case 295: return "American black bear"; break;
+	case 294: return "black bear"; break;//"brown bear"
+	case 295: return "black bear"; break; //"American black bear"
 	case 296: return "ice bear"; break;
-	case 297: return "sloth bear"; break;
+	case 297: return "black bear"; break; // "sloth bear"
 	case 298: return "mongoose"; break;
 	case 299: return "meerkat"; break;
 	case 300: return "tiger beetle"; break;

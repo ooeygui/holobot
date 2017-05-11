@@ -12,7 +12,6 @@
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
-                <RowDefinition Height="20"/>
             </Grid.RowDefinitions>
 
             <Border Grid.Row="0" x:Name="refreshElement" Background="#01010101"/>
@@ -23,7 +22,8 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <Image Grid.Column="0" x:Name="CapturePreviewLeft"  Stretch="Fill"/>
+                <Image Grid.Column="0" x:Name="FullScreenImage"  Stretch="UniformToFill"/>
+                <Image Grid.Column="0" x:Name="PreviewImage"  Stretch="UniformToFill" Width="200" Height="200" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="24"/>
             </Grid>
             <dronectls:DroneOverlayControl
                 x:Name="DroneOverlay"

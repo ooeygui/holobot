@@ -23,18 +23,60 @@ namespace Control
     class FrameRenderer
     {
         private Image _imageElement;
+        private Image _previewImageElement;
         private SoftwareBitmap _backBuffer;
         private bool _taskRunning = false;
 
-        public FrameRenderer(Image imageElement)
+        public FrameRenderer(Image imageElement, Image previewimageElement)
         {
             _imageElement = imageElement;
             _imageElement.Source = new SoftwareBitmapSource();
+
+            _previewImageElement = previewimageElement;
+            _previewImageElement.Source = new SoftwareBitmapSource();
         }
 
-        public void ProcessFrame(MediaFrameReference frame)
+        public void ProcessFrameForPreview(SoftwareBitmap inputBitmap, MediaFrameSourceKind? sourceKind, float depthScale)
         {
-            var softwareBitmap = FrameRenderer.ConvertToDisplayableImage(frame?.VideoMediaFrame);
+            var softwareBitmap = FrameRenderer.ConvertToDisplayableImage(inputBitmap, sourceKind, depthScale);
+
+            if (softwareBitmap != null)
+            {
+                // Swap the processed frame to _backBuffer and trigger UI thread to render it
+                softwareBitmap = Interlocked.Exchange(ref _backBuffer, softwareBitmap);
+
+                // UI thread always reset _backBuffer before using it.  Unused bitmap should be disposed.
+                softwareBitmap?.Dispose();
+
+                // Changes to xaml ImageElement must happen in UI thread through Dispatcher
+                var task = _previewImageElement.Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
+                    async () =>
+                    {
+                        // Don't let two copies of this task run at the same time.
+                        if (_taskRunning)
+                        {
+                            return;
+                        }
+
+                        _taskRunning = true;
+
+                        // Keep draining frames from the backbuffer until the backbuffer is empty.
+                        SoftwareBitmap latestBitmap;
+                        while ((latestBitmap = Interlocked.Exchange(ref _backBuffer, null)) != null)
+                        {
+                            var imageSource = (SoftwareBitmapSource)_previewImageElement.Source;
+                            await imageSource.SetBitmapAsync(latestBitmap);
+                            latestBitmap.Dispose();
+                        }
+
+                        _taskRunning = false;
+                    });
+            }
+        }
+
+        public void ProcessFrame(SoftwareBitmap inputBitmap, MediaFrameSourceKind? sourceKind, float depthScale)
+        {
+            var softwareBitmap = FrameRenderer.ConvertToDisplayableImage(inputBitmap, sourceKind, depthScale);
 
             if (softwareBitmap != null)
             {
@@ -77,11 +119,11 @@ namespace Control
         /// Converts a frame to a SoftwareBitmap of a valid format to display in an Image control.
         /// </summary>
         /// <param name="inputFrame">Frame to convert.</param>
-        public static unsafe SoftwareBitmap ConvertToDisplayableImage(VideoMediaFrame inputFrame)
+        public static unsafe SoftwareBitmap ConvertToDisplayableImage(SoftwareBitmap inputBitmap, MediaFrameSourceKind? sourceKind, float depthScale)
         {
             SoftwareBitmap result = null;
-            using (var inputBitmap = inputFrame?.SoftwareBitmap)
-            {
+            //using (var inputBitmap = inputFrame?.SoftwareBitmap)
+            //{
                 if (inputBitmap != null)
                 {
                     if (inputBitmap.BitmapPixelFormat == BitmapPixelFormat.Bgra8 &&
@@ -92,10 +134,9 @@ namespace Control
                     }
                     else if (inputBitmap.BitmapPixelFormat == BitmapPixelFormat.Gray16)
                     {
-                        if (inputFrame.FrameReference.SourceKind == MediaFrameSourceKind.Depth)
+                        if (sourceKind.HasValue && sourceKind.Value == MediaFrameSourceKind.Depth)
                         {
                             // Use a special pseudo color to render 16 bits depth frame.
-                            var depthScale = (float)inputFrame.DepthMediaFrame.DepthFormat.DepthScaleInMeters;
                             result = TransformBitmap(inputBitmap, (w, i, o) => PseudoColorHelper.PseudoColorForDepth(w, i, o, depthScale));
                         }
                         else
@@ -124,7 +165,7 @@ namespace Control
 
                     }
                 }
-            }
+            //}
             return result;
         }
 
