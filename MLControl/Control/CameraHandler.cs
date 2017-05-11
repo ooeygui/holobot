@@ -215,7 +215,7 @@ namespace Control
                 {
                     if (mediaEncodingProperty.Width == 640 &&
                         mediaEncodingProperty.Height == 480 &&
-                        mediaEncodingProperty.FrameRate.Numerator == 15 &&
+                        mediaEncodingProperty.FrameRate.Numerator == 30 &&
                         string.Compare(mediaEncodingProperty.Subtype, "YUY2") == 0)
                     {
                         Debug.WriteLine("Chosen: " + mediaEncodingProperty.Width + "x" + mediaEncodingProperty.Height + " FPS: " + mediaEncodingProperty.FrameRate.Numerator + "Type:" + mediaEncodingProperty.Type + "   SubType:" + mediaEncodingProperty.Subtype);

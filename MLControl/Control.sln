@@ -1,13 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.26403.7
+VisualStudioVersion = 15.0.26228.9
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Control", "Control\Control.csproj", "{3F546C80-E3FD-4935-82F4-271256C5E01D}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FrameAnalysis", "FrameAnalysis\FrameAnalysis.vcxproj", "{A3F765C3-7760-47BF-8000-0393E356740D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AwareGroup.IoTDroneDisplay.DroneControls", "..\extern\iot-controls\AwareGroup.IoTDroneDisplay.DroneControls\AwareGroup.IoTDroneDisplay.DroneControls.csproj", "{4C19B0A1-2AD9-42B5-9139-18CE2FC29C62}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AwareGroup.IoTDroneDisplay.DroneControls", "..\..\iot-controls\AwareGroup.IoTDroneDisplay.DroneControls\AwareGroup.IoTDroneDisplay.DroneControls.csproj", "{4C19B0A1-2AD9-42B5-9139-18CE2FC29C62}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

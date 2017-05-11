@@ -61,7 +61,7 @@ namespace Control
             //Assign View Model to Data Context
             VM = new DroneControlViewModel();
             this.DataContext = VM;
-            VM.Objective = "Waiting for mission";
+            VM.Objective = "";
 
             var hostNames = NetworkInformation.GetHostNames();
             var hostName = hostNames.FirstOrDefault(name => name.Type == HostNameType.DomainName)?.DisplayName ?? "???";
@@ -108,7 +108,7 @@ namespace Control
             {
                 if (robot.CurrentMission == -1)
                 {
-                    VM.Objective = "Waiting for mission";
+                    VM.Objective = "";
                 }
                 else
                 {
@@ -121,7 +121,11 @@ namespace Control
         {
             if (string.CompareOrdinal(e.PropertyName, "ClassifiedImageName") == 0)
             {
-                VM.Status = $"Found {cameraHandler.ClassifiedImageName}";
+                // Only display current mission finds.
+                //if (robot.CurrentMission == cameraHandler.ClassifiedImage)
+                {
+                    VM.Status = $"Classifier Detected: {cameraHandler.ClassifiedImageName}";
+                }
             }
         }
 

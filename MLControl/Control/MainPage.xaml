@@ -37,6 +37,7 @@
                 BatteryLevel="{Binding BatteryLevel}"
                 Objective="{Binding Objective}"
                 Status="{Binding Status}"
+                Vehicle="Rover"
                 />
         </Grid>
     </Grid>

@@ -38,7 +38,8 @@ namespace Control
         public const float stepsPerCM = stepsPerRotation / wheelCircumference / downGear;
         public const float wheelBase = 38.1f; // CM
         public const float wheelBaseRadius = wheelBase / 2.0f;
-        public const short maxSpeed = 1500;
+        public const short maxSpeed = 500;
+        public const short maxAnalogSpeed = 1500;
         public const short acceleration = 800;
 
 
@@ -180,6 +181,11 @@ namespace Control
         {
             // Convert from analog positions to left/right distances
 
+            if (cancellationTokenSource != null && cancellationTokenSource.IsCancellationRequested)
+            {
+                cancellationTokenSource.Cancel();
+            }
+
             if (Math.Abs(xAnalog) < lowEndCutOff)
             {
                 xAnalog = 0.0;
@@ -220,18 +226,15 @@ namespace Control
 
             if (Math.Abs(leftMotorThrottle) < lowEndCutOff)
             {
-                if (previousLeftThrottle < 0.0)
-                {
-                    leftDirection = 0;
-                }
-
-                leftSpeed = (short)(Math.Abs(previousLeftThrottle) * maxSpeed);
+                leftDirection = (byte)((previousLeftThrottle < 0.0) ? 0 : 1);
+                leftSpeed = (short)(Math.Abs(previousLeftThrottle) * maxAnalogSpeed);
                 leftRunDistance = rampDistance;
                 // Ramp to zero.
             }
             else
             {
-                leftSpeed = (short)(Math.Abs(leftMotorThrottle) * maxSpeed);
+                leftDirection = (byte)((leftMotorThrottle < 0.0) ? 0 : 1);
+                leftSpeed = (short)(Math.Abs(leftMotorThrottle) * maxAnalogSpeed);
             }
 
             if (Math.Abs(previousLeftThrottle) < lowEndCutOff)
@@ -263,19 +266,16 @@ namespace Control
 
             if (Math.Abs(rightMotorThrottle) < lowEndCutOff)
             {
-                if (previousRightThrottle < 0.0)
-                {
-                    rightDirection = 0;
-                }
-
-                rightSpeed = (short)(Math.Abs(previousRightThrottle) * maxSpeed);
+                rightDirection = (byte)((previousRightThrottle < 0.0) ? 0 : 1);
+                rightSpeed = (short)(Math.Abs(previousRightThrottle) * maxAnalogSpeed);
                 rightRunDistance = rampDistance;
 
                 // Ramp to zero.
             }
             else
             {
-                rightSpeed = (short)(Math.Abs(rightMotorThrottle) * maxSpeed);
+                rightDirection = (byte)((rightMotorThrottle < 0.0) ? 0 : 1);
+                rightSpeed = (short)(Math.Abs(rightMotorThrottle) * maxAnalogSpeed);
             }
 
             if (Math.Abs(previousRightThrottle) < lowEndCutOff)
@@ -302,7 +302,7 @@ namespace Control
             previousRightThrottle = rightMotorThrottle;
         }
 
-        public Task<bool> Move(float rightDistance, float leftDistance, CancellationTokenSource cancelation = null)
+        public Task<bool> Move(float rightDistance, float leftDistance , CancellationTokenSource cancelation = null)
         {
             var completion = new TaskCompletionSource<bool>();
             if (cancelation != null && cancelation.IsCancellationRequested)
@@ -335,7 +335,8 @@ namespace Control
                         Interlocked.Decrement(ref outstandingMovesLeft);
                         await arduinoPort.DigitalWrite(stepperLeftEnable, ArduinoComPort.PinState.High);
                         if (outstandingMovesLeft == 0 &&
-                            outstandingMovesRight == 0)
+                            outstandingMovesRight == 0 && 
+                            !completion.Task.IsCanceled)
                         {
                             completion.SetResult(true);
                         }
@@ -352,7 +353,8 @@ namespace Control
                         await arduinoPort.DigitalWrite(stepperRightEnable, ArduinoComPort.PinState.High);
 
                         if (outstandingMovesLeft == 0 &&
-                            outstandingMovesRight == 0)
+                            outstandingMovesRight == 0 &&
+                            !completion.Task.IsCanceled)
                         {
                             completion.SetResult(true);
                         }
@@ -398,35 +400,32 @@ namespace Control
 
         public async Task Mission(int mission)
         {
-            if (CurrentMission == -1)
+            // Cancel current mission
+            await Stop();
+
+            CurrentMission = mission;
+            handler.PropertyChanged += Handler_PropertyChanged;
+
+            cancellationTokenSource = new CancellationTokenSource();
+            Heading = 0;
+
+            foreach (var i in Enumerable.Range(0, 4))
             {
-                CurrentMission = mission;
-                handler.PropertyChanged += Handler_PropertyChanged;
-
-                cancellationTokenSource = new CancellationTokenSource();
+                await Move(20, cancellationTokenSource);        // Forward 20cm
+                await Rotate(90, cancellationTokenSource);       // Right
+                Heading = 90;
+                await Move(150, cancellationTokenSource);        // Forward 1.5m
+                await Rotate(-90, cancellationTokenSource);      // Left
                 Heading = 0;
+                await Move(20, cancellationTokenSource);         // Forward 20cm
+                await Rotate(-90, cancellationTokenSource);      // Left
+                Heading = -90;
 
-
-                foreach (var i in Enumerable.Range(0, 5))
-                {
-                    await Rotate(90, cancellationTokenSource);       // Right
-                    Heading = 90;
-                    await Move(150, cancellationTokenSource);        // Forward 1.5m
-                    await Rotate(-90, cancellationTokenSource);      // Left
-                    Heading = 0;
-                    await Move(20, cancellationTokenSource);         // Forward 20cm
-                    await Rotate(-90, cancellationTokenSource);      // Left
-                    Heading = -90;
-
-                    await Move(150, cancellationTokenSource);        // Forward  1.5m
-                    await Rotate(90, cancellationTokenSource);      // Right
-                    await Move(20, cancellationTokenSource);         // Forward 20cm
-                    Heading = 0;
-                }
-
-                CurrentMission = -1;
+                await Move(150, cancellationTokenSource);        // Forward  1.5m
+                await Rotate(90, cancellationTokenSource);      // Right
+                await Move(20, cancellationTokenSource);         // Forward 20cm
+                Heading = 0;
             }
-
         }
 
         private async void Handler_PropertyChanged(object sender, PropertyChangedEventArgs e)
@@ -443,8 +442,6 @@ namespace Control
 
                     // Found!
                     await Stop();
-
-                    CurrentMission = -1;
                 }
             }
         }
